@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Resource Allocation Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #f5f6fa; --card: #ffffff; --sidebar: #0f3460;
+            --accent: #e94560; --text: #1a1a2e; --muted: #7f8c8d;
+            --border: #e0e0e0; --green: #16c79a;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: 220px; background: var(--sidebar); color: #fff; padding: 24px 0; position: fixed; top: 0; left: 0; bottom: 0; overflow-y: auto; }
+        .sidebar h2 { font-size: 15px; padding: 0 20px; margin-bottom: 6px; font-weight: 600; }
+        .sidebar p { font-size: 11px; color: #8eafc4; padding: 0 20px; margin-bottom: 24px; }
+        .nav-btn { display: block; width: 100%; text-align: left; background: none; border: none; color: #c0d6e8; padding: 10px 20px; font-size: 13px; cursor: pointer; transition: all .15s; }
+        .nav-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+        .nav-btn.active { background: rgba(255,255,255,.12); color: #fff; border-left: 3px solid var(--accent); font-weight: 600; }
+        .sidebar-footer { position: absolute; bottom: 16px; padding: 0 20px; font-size: 10px; color: #5a7a92; }
+
+        /* Main */
+        .main { margin-left: 220px; flex: 1; padding: 28px 32px; }
+        .page { display: none; } .page.active { display: block; }
+        .page h1 { font-size: 22px; margin-bottom: 20px; }
+
+        /* Cards */
+        .card { background: var(--card); border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
+        .metric { background: var(--card); border-radius: 10px; padding: 16px; border-left: 4px solid var(--sidebar); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+        .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+        .metric-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+        .metric-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { background: #f0f2f6; text-align: left; padding: 8px 12px; font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+        td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+
+        /* Loading */
+        .loading { position: fixed; inset: 0; background: rgba(255,255,255,.85); display: flex; align-items: center; justify-content: center; z-index: 999; }
+        .loading.hidden { display: none; }
+        .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--sidebar); border-radius: 50%; animation: spin .7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .status { position: fixed; top: 12px; right: 16px; font-size: 11px; padding: 4px 10px; border-radius: 20px; z-index: 1000; }
+        .status.ok { background: #d4edda; color: #155724; }
+        .status.err { background: #f8d7da; color: #721c24; }
+
+        @media (max-width: 768px) {
+            .sidebar { width: 100%; position: relative; }
+            .main { margin-left: 0; }
+            body { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <h2>Cloud Resource Allocation</h2>
+        <p>ML Clustering Dashboard</p>
+        <button class="nav-btn active" data-page="overview">Overview</button>
+        <button class="nav-btn" data-page="outliers">Outliers</button>
+        <button class="nav-btn" data-page="correlation">Correlation</button>
+        <button class="nav-btn" data-page="elbow">Elbow Method</button>
+        <button class="nav-btn" data-page="clustering">Clustering</button>
+        <button class="nav-btn" data-page="explorer">Cluster Explorer</button>
+        <button class="nav-btn" data-page="tsne">t-SNE</button>
+        <div class="sidebar-footer">Group 23 - AIML Project</div>
+    </nav>
+
+    <div class="main">
+        <div id="loading" class="loading"><div class="spinner"></div></div>
+        <div id="status" class="status"></div>
+
+        <div id="page-overview" class="page active"><h1>Dataset Overview</h1><div id="ov-metrics" class="metrics"></div><div class="card"><h3>Feature Statistics</h3><div id="ov-table"></div></div><div class="card"><h3>Feature Distributions</h3><div id="ov-hist"></div></div></div>
+        <div id="page-outliers" class="page"><h1>Outlier Analysis (IQR)</h1><div id="out-metric" class="metrics"></div><div class="card"><div id="out-chart"></div></div><div class="card"><div id="out-table"></div></div></div>
+        <div id="page-correlation" class="page"><h1>Correlation Matrix</h1><div class="card"><div id="corr-chart"></div></div></div>
+        <div id="page-elbow" class="page"><h1>Elbow Method</h1><div class="card"><div id="elbow-chart"></div></div><div class="card"><div id="elbow-table"></div></div></div>
+        <div id="page-clustering" class="page"><h1>KMeans Clustering</h1><div id="cl-metrics" class="metrics"></div><div class="card"><h3>Cluster Centroids</h3><div id="cl-table"></div></div><div class="card"><h3>Cluster Comparison</h3><div id="cl-chart"></div></div></div>
+        <div id="page-explorer" class="page"><h1>Cluster Explorer</h1><div class="card"><label>X: <select id="ex-x"></select></label> <label>Y: <select id="ex-y"></select></label><div id="ex-chart"></div></div></div>
+        <div id="page-tsne" class="page"><h1>t-SNE Visualization</h1><div class="card"><div id="tsne-chart"></div></div></div>
+    </div>
+
+<script>
+const SUPABASE_URL = "https://ltgghjqptfokkidbiaif.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0Z2doanFwdGZva2tpZGJpYWlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MjM2ODgsImV4cCI6MjA4NzQ5OTY4OH0.VUVXG33fT8rlBdHwuyzqsCKnQeK21Bd92namuMdRWFY";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const COLORS = ["#0f3460","#e94560","#16c79a","#f5a623","#7b68ee","#00bcd4"];
+const layout = { font:{family:"-apple-system,sans-serif",size:12}, paper_bgcolor:"transparent", plot_bgcolor:"transparent", margin:{l:50,r:20,t:40,b:40} };
+
+/* Nav */
+document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".nav-btn").forEach(n => n.classList.remove("active"));
+    b.classList.add("active");
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+    document.getElementById("page-" + b.dataset.page).classList.add("active");
+}));
+
+function fmt(n) { return typeof n === "number" ? n.toLocaleString(undefined,{maximumFractionDigits:2}) : n; }
+function title(s) { return s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
+
+async function fetchAll(table) {
+    let rows = [], from = 0, size = 1000;
+    while (true) {
+        const {data,error} = await sb.from(table).select("*").range(from, from+size-1);
+        if (error) throw error;
+        rows.push(...data);
+        if (data.length < size) break;
+        from += size;
+    }
+    return rows;
+}
+
+async function init() {
+    try {
+        const [stats, outliers, corr, elbow, summary, clustered, tsne] = await Promise.all([
+            fetchAll("data_stats"), fetchAll("outlier_counts"), fetchAll("correlation_data"),
+            fetchAll("elbow_data"), fetchAll("cluster_summary"), fetchAll("clustered_data"), fetchAll("tsne_data")
+        ]);
+
+        document.getElementById("status").textContent = "Connected";
+        document.getElementById("status").className = "status ok";
+
+        /* Overview */
+        if (stats.length) {
+            let mh = "";
+            stats.forEach(s => { mh += `<div class="metric"><div class="metric-label">${title(s.feature_name)}</div><div class="metric-value">${fmt(s.mean_val)}</div><div class="metric-sub">Std: ${fmt(s.std_val)}</div></div>`; });
+            document.getElementById("ov-metrics").innerHTML = mh;
+            let th = "<table><thead><tr><th>Feature</th><th>Mean</th><th>Std</th><th>Min</th><th>Max</th><th>Median</th><th>Rows</th></tr></thead><tbody>";
+            stats.forEach(s => { th += `<tr><td>${title(s.feature_name)}</td><td>${fmt(s.mean_val)}</td><td>${fmt(s.std_val)}</td><td>${fmt(s.min_val)}</td><td>${fmt(s.max_val)}</td><td>${fmt(s.median_val)}</td><td>${s.row_count}</td></tr>`; });
+            document.getElementById("ov-table").innerHTML = th + "</tbody></table>";
+        }
+        if (clustered.length) {
+            const numCols = Object.keys(clustered[0]).filter(c => !["id","created_at","cluster_id"].includes(c));
+            const col = numCols[0];
+            const vals = clustered.map(r => r[col]);
+            Plotly.newPlot("ov-hist", [{x:vals,type:"histogram",nbinsx:40,marker:{color:COLORS[0]}}], {...layout,title:title(col)+" Distribution"},{responsive:true});
+        }
+
+        /* Outliers */
+        if (outliers.length) {
+            const total = outliers.reduce((s,o) => s+o.outlier_count, 0);
+            document.getElementById("out-metric").innerHTML = `<div class="metric"><div class="metric-label">Total Outliers</div><div class="metric-value">${total}</div></div>`;
+            Plotly.newPlot("out-chart", [{x:outliers.map(o=>title(o.feature_name)),y:outliers.map(o=>o.outlier_count),type:"bar",marker:{color:outliers.map(o=>o.outlier_count>0?COLORS[1]:COLORS[0])}}], {...layout},{responsive:true});
+            let th = "<table><thead><tr><th>Feature</th><th>Outlier Count</th></tr></thead><tbody>";
+            outliers.forEach(o => { th += `<tr><td>${title(o.feature_name)}</td><td>${o.outlier_count}</td></tr>`; });
+            document.getElementById("out-table").innerHTML = th + "</tbody></table>";
+        }
+
+        /* Correlation */
+        if (corr.length) {
+            const cols = JSON.parse(corr[0].columns_list), mat = JSON.parse(corr[0].matrix_data);
+            const labels = cols.map(c => title(c));
+            const text = mat.map(row => row.map(v => v.toFixed(2)));
+            Plotly.newPlot("corr-chart", [{z:mat,x:labels,y:labels,type:"heatmap",colorscale:"RdBu",reversescale:true,zmin:-1,zmax:1,text:text,texttemplate:"%{text}",hoverinfo:"z"}], {...layout,height:550},{responsive:true});
+        }
+
+        /* Elbow */
+        if (elbow.length) {
+            const sorted = elbow.sort((a,b) => a.k - b.k);
+            Plotly.newPlot("elbow-chart", [{x:sorted.map(e=>e.k),y:sorted.map(e=>e.inertia),type:"scatter",mode:"lines+markers",marker:{color:COLORS[0],size:8},line:{color:COLORS[0]}}], {...layout,xaxis:{title:"K"},yaxis:{title:"Inertia (WCSS)"}},{responsive:true});
+            let th = "<table><thead><tr><th>K</th><th>Inertia</th></tr></thead><tbody>";
+            sorted.forEach(e => { th += `<tr><td>${e.k}</td><td>${fmt(e.inertia)}</td></tr>`; });
+            document.getElementById("elbow-table").innerHTML = th + "</tbody></table>";
+        }
+
+        /* Clustering */
+        if (summary.length) {
+            const sorted = summary.sort((a,b) => a.cluster_id - b.cluster_id);
+            let mh = "";
+            sorted.forEach(s => { mh += `<div class="metric" style="border-left-color:${COLORS[s.cluster_id%COLORS.length]}"><div class="metric-label">Cluster ${s.cluster_id}</div><div class="metric-value">${s.record_count} records</div></div>`; });
+            document.getElementById("cl-metrics").innerHTML = mh;
+            const meanCols = Object.keys(sorted[0]).filter(c => c.endsWith("_mean"));
+            let th = "<table><thead><tr><th>Cluster</th>" + meanCols.map(c => `<th>${title(c.replace("_mean",""))}</th>`).join("") + "<th>Count</th></tr></thead><tbody>";
+            sorted.forEach(s => { th += `<tr><td>${s.cluster_id}</td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td>${s.record_count}</td></tr>`; });
+            document.getElementById("cl-table").innerHTML = th + "</tbody></table>";
+            const traces = sorted.map(s => ({name:`Cluster ${s.cluster_id}`,x:meanCols.map(c=>title(c.replace("_mean",""))),y:meanCols.map(c=>s[c]),type:"bar",marker:{color:COLORS[s.cluster_id%COLORS.length]}}));
+            Plotly.newPlot("cl-chart", traces, {...layout,barmode:"group"},{responsive:true});
+        }
+
+        /* Explorer */
+        if (clustered.length) {
+            const numCols = Object.keys(clustered[0]).filter(c => !["id","created_at","cluster_id"].includes(c));
+            const selX = document.getElementById("ex-x"), selY = document.getElementById("ex-y");
+            numCols.forEach((c,i) => { selX.add(new Option(title(c),c,i===0)); selY.add(new Option(title(c),c,i===1)); });
+            selY.selectedIndex = Math.min(1, numCols.length-1);
+            function plotExplorer() {
+                const xc = selX.value, yc = selY.value;
+                const clusters = [...new Set(clustered.map(r=>r.cluster_id))].sort();
+                const traces = clusters.map(cid => {
+                    const pts = clustered.filter(r=>r.cluster_id===cid);
+                    return {x:pts.map(r=>r[xc]),y:pts.map(r=>r[yc]),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.6,size:4}};
+                });
+                Plotly.newPlot("ex-chart", traces, {...layout,xaxis:{title:title(xc)},yaxis:{title:title(yc)},height:500},{responsive:true});
+            }
+            selX.onchange = plotExplorer; selY.onchange = plotExplorer;
+            plotExplorer();
+        }
+
+        /* t-SNE */
+        if (tsne.length) {
+            const clusters = [...new Set(tsne.map(r=>r.cluster_id))].sort();
+            const traces = clusters.map(cid => {
+                const pts = tsne.filter(r=>r.cluster_id===cid);
+                return {x:pts.map(r=>r.x),y:pts.map(r=>r.y),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.7,size:4}};
+            });
+            Plotly.newPlot("tsne-chart", traces, {...layout,xaxis:{title:"t-SNE 1"},yaxis:{title:"t-SNE 2"},height:600},{responsive:true});
+        }
+
+    } catch(e) {
+        document.getElementById("status").textContent = "Error: " + e.message;
+        document.getElementById("status").className = "status err";
+    }
+    document.getElementById("loading").classList.add("hidden");
+}
+init();
+</script>
+</body>
+</html>
