@@ -2,8 +2,5 @@ httpx
 pandas
 numpy
 scikit-learn
-matplotlib
-seaborn
-requests
 streamlit
 plotly

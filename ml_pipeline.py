@@ -10,12 +10,6 @@ from sklearn.cluster import KMeans
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 from typing import Tuple, Dict, List
-import io
-import base64
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 
 # Column name mapping from raw CSV to clean names
@@ -176,14 +170,3 @@ def compute_correlation(df: pd.DataFrame) -> Dict:
         "columns": numeric_cols,
         "matrix": corr.values.tolist(),
     }
-
-
-def generate_plot_base64(plot_func, **kwargs) -> str:
-    """Generate a matplotlib plot and return as base64 PNG."""
-    fig, ax = plt.subplots(figsize=kwargs.get("figsize", (10, 6)))
-    plot_func(ax=ax, **{k: v for k, v in kwargs.items() if k != "figsize"})
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
-    plt.close(fig)
-    buf.seek(0)
-    return base64.b64encode(buf.read()).decode("utf-8")
