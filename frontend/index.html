@@ -41,7 +41,8 @@
         .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px; }
         .metric { background: linear-gradient(135deg, var(--card) 0%, rgba(0,217,255,.05) 100%); border-radius: 12px; padding: 16px; border-left: 4px solid; border-left-color: var(--accent); box-shadow: 0 2px 6px rgba(0,217,255,.08); border: 1px solid var(--border); }
         .metric-accuracy { background: linear-gradient(135deg, var(--green) 0%, rgba(0,255,136,.1) 100%); border-left-color: var(--green) !important; }
-        .metric-accuracy .metric-value { color: var(--green); }
+        .metric-accuracy .metric-value { color: var(--green); font-weight: 800; }
+        .metric-accuracy .metric-label { color: #00cc66; font-weight: 700; }
         .metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
         .metric-value { font-size: 22px; font-weight: 700; margin-top: 4px; }
         .metric-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -170,11 +171,11 @@ async function init() {
         /* Outliers */
         if (outliers.length) {
             const total = outliers.reduce((s,o) => s+o.outlier_count, 0);
-            document.getElementById("out-metric").innerHTML = `<div class="metric metric-accuracy"><div class="metric-label">Total Outliers Detected</div><div class="metric-value">${total}</div><div class="metric-sub">IQR Method</div></div>`;
-            const colors = outliers.map(o=>o.outlier_count>0?COLORS[1]:COLORS[0]);
-            Plotly.newPlot("out-chart", [{x:outliers.map(o=>title(o.feature_name)),y:outliers.map(o=>o.outlier_count),type:"bar",marker:{color:colors,line:{color:COLORS[1],width:1}},hovertemplate:"<b>%{x}</b><br>Outliers: %{y}<extra></extra>"}], {...layout,title:"Outlier Distribution by Feature",yaxis:{title:"Outlier Count"}},{responsive:true});
+            document.getElementById("out-metric").innerHTML = `<div class="metric metric-accuracy"><div class="metric-label">Total Outliers</div><div class="metric-value">${total}</div><div class="metric-sub">IQR Method</div></div>`;
+            const colors = outliers.map(o=>o.outlier_count>0?COLORS[1]:COLORS[5]);
+            Plotly.newPlot("out-chart", [{x:outliers.map(o=>title(o.feature_name)),y:outliers.map(o=>o.outlier_count),type:"bar",marker:{color:colors,line:{color:COLORS[0],width:2}},text:outliers.map(o=>o.outlier_count),textposition:"outside",hovertemplate:"<b>%{x}</b><br>Outliers: %{y}<extra></extra>"}], {...layout,title:"Outlier Count Distribution",yaxis:{title:"Number of Outliers",gridwidth:2},height:400},{responsive:true});
             let th = "<table><thead><tr><th>Feature</th><th>Outlier Count</th><th>Status</th></tr></thead><tbody>";
-            outliers.forEach(o => { const status = o.outlier_count > 0 ? "⚠️ Found" : "✓ None"; th += `<tr><td>${title(o.feature_name)}</td><td><strong>${o.outlier_count}</strong></td><td>${status}</td></tr>`; });
+            outliers.forEach(o => { const status = o.outlier_count > 0 ? "⚠️ Alert" : "✓ Clean"; th += `<tr><td><strong>${title(o.feature_name)}</strong></td><td><strong>${o.outlier_count}</strong></td><td>${status}</td></tr>`; });
             document.getElementById("out-table").innerHTML = th + "</tbody></table>";
         }
 
