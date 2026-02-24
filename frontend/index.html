@@ -100,7 +100,14 @@ const SUPABASE_URL = "https://ltgghjqptfokkidbiaif.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0Z2doanFwdGZva2tpZGJpYWlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5MjM2ODgsImV4cCI6MjA4NzQ5OTY4OH0.VUVXG33fT8rlBdHwuyzqsCKnQeK21Bd92namuMdRWFY";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const COLORS = ["#00d9ff","#0088ff","#d946ef","#ff0099","#ff8800","#00ff88"];
-const layout = { font:{family:"-apple-system,sans-serif",size:12}, paper_bgcolor:"transparent", plot_bgcolor:"transparent", margin:{l:50,r:20,t:40,b:40} };
+const layout = { 
+    font:{family:"-apple-system,sans-serif",size:12,color:"var(--text)"}, 
+    paper_bgcolor:"transparent", 
+    plot_bgcolor:"transparent",
+    xaxis:{showgrid:true,gridwidth:1,gridcolor:"rgba(100,116,139,.1)",zeroline:false},
+    yaxis:{showgrid:true,gridwidth:1,gridcolor:"rgba(100,116,139,.1)",zeroline:false},
+    margin:{l:50,r:20,t:40,b:40} 
+};
 
 /* Nav */
 document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", () => {
@@ -163,10 +170,11 @@ async function init() {
         /* Outliers */
         if (outliers.length) {
             const total = outliers.reduce((s,o) => s+o.outlier_count, 0);
-            document.getElementById("out-metric").innerHTML = `<div class="metric"><div class="metric-label">Total Outliers</div><div class="metric-value">${total}</div></div>`;
-            Plotly.newPlot("out-chart", [{x:outliers.map(o=>title(o.feature_name)),y:outliers.map(o=>o.outlier_count),type:"bar",marker:{color:outliers.map(o=>o.outlier_count>0?COLORS[1]:COLORS[0])}}], {...layout},{responsive:true});
-            let th = "<table><thead><tr><th>Feature</th><th>Outlier Count</th></tr></thead><tbody>";
-            outliers.forEach(o => { th += `<tr><td>${title(o.feature_name)}</td><td>${o.outlier_count}</td></tr>`; });
+            document.getElementById("out-metric").innerHTML = `<div class="metric metric-accuracy"><div class="metric-label">Total Outliers Detected</div><div class="metric-value">${total}</div><div class="metric-sub">IQR Method</div></div>`;
+            const colors = outliers.map(o=>o.outlier_count>0?COLORS[1]:COLORS[0]);
+            Plotly.newPlot("out-chart", [{x:outliers.map(o=>title(o.feature_name)),y:outliers.map(o=>o.outlier_count),type:"bar",marker:{color:colors,line:{color:COLORS[1],width:1}},hovertemplate:"<b>%{x}</b><br>Outliers: %{y}<extra></extra>"}], {...layout,title:"Outlier Distribution by Feature",yaxis:{title:"Outlier Count"}},{responsive:true});
+            let th = "<table><thead><tr><th>Feature</th><th>Outlier Count</th><th>Status</th></tr></thead><tbody>";
+            outliers.forEach(o => { const status = o.outlier_count > 0 ? "⚠️ Found" : "✓ None"; th += `<tr><td>${title(o.feature_name)}</td><td><strong>${o.outlier_count}</strong></td><td>${status}</td></tr>`; });
             document.getElementById("out-table").innerHTML = th + "</tbody></table>";
         }
 
@@ -175,15 +183,15 @@ async function init() {
             const cols = JSON.parse(corr[0].columns_list), mat = JSON.parse(corr[0].matrix_data);
             const labels = cols.map(c => title(c));
             const text = mat.map(row => row.map(v => v.toFixed(2)));
-            Plotly.newPlot("corr-chart", [{z:mat,x:labels,y:labels,type:"heatmap",colorscale:"RdBu",reversescale:true,zmin:-1,zmax:1,text:text,texttemplate:"%{text}",hoverinfo:"z"}], {...layout,height:550},{responsive:true});
+            Plotly.newPlot("corr-chart", [{z:mat,x:labels,y:labels,type:"heatmap",colorscale:"Viridis",zmin:-1,zmax:1,text:text,texttemplate:"%{text}",textfont:{size:11},hovertemplate:"<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>"}], {...layout,height:550,title:"Feature Correlation Matrix"},{responsive:true});
         }
 
         /* Elbow */
         if (elbow.length) {
             const sorted = elbow.sort((a,b) => a.k - b.k);
-            Plotly.newPlot("elbow-chart", [{x:sorted.map(e=>e.k),y:sorted.map(e=>e.inertia),type:"scatter",mode:"lines+markers",marker:{color:COLORS[0],size:8},line:{color:COLORS[0]}}], {...layout,xaxis:{title:"K"},yaxis:{title:"Inertia (WCSS)"}},{responsive:true});
-            let th = "<table><thead><tr><th>K</th><th>Inertia</th></tr></thead><tbody>";
-            sorted.forEach(e => { th += `<tr><td>${e.k}</td><td>${fmt(e.inertia)}</td></tr>`; });
+            Plotly.newPlot("elbow-chart", [{x:sorted.map(e=>e.k),y:sorted.map(e=>e.inertia),type:"scatter",mode:"lines+markers",marker:{color:COLORS[0],size:8,line:{color:COLORS[1],width:2}},line:{color:COLORS[0],width:3},hovertemplate:"K=%{x}<br>Inertia: %{y:.0f}<extra></extra>"}], {...layout,title:"Elbow Method - Optimal K Selection",xaxis:{title:"Number of Clusters (K)",tickmode:"linear"},yaxis:{title:"Inertia (WCSS)"}},{responsive:true});
+            let th = "<table><thead><tr><th>K</th><th>Inertia</th><th>Reduction %</th></tr></thead><tbody>";
+            sorted.forEach((e,i) => { const reduction = i > 0 ? (((sorted[i-1].inertia - e.inertia) / sorted[i-1].inertia * 100).toFixed(1)) : "—"; th += `<tr><td>${e.k}</td><td>${fmt(e.inertia)}</td><td>${reduction}</td></tr>`; });
             document.getElementById("elbow-table").innerHTML = th + "</tbody></table>";
         }
 
@@ -197,8 +205,8 @@ async function init() {
             let th = "<table><thead><tr><th>Cluster</th>" + meanCols.map(c => `<th>${title(c.replace("_mean",""))}</th>`).join("") + "<th>Count</th></tr></thead><tbody>";
             sorted.forEach(s => { th += `<tr><td>${s.cluster_id}</td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td>${s.record_count}</td></tr>`; });
             document.getElementById("cl-table").innerHTML = th + "</tbody></table>";
-            const traces = sorted.map(s => ({name:`Cluster ${s.cluster_id}`,x:meanCols.map(c=>title(c.replace("_mean",""))),y:meanCols.map(c=>s[c]),type:"bar",marker:{color:COLORS[s.cluster_id%COLORS.length]}}));
-            Plotly.newPlot("cl-chart", traces, {...layout,barmode:"group"},{responsive:true});
+            const traces = sorted.map(s => ({name:`Cluster ${s.cluster_id}`,x:meanCols.map(c=>title(c.replace("_mean",""))),y:meanCols.map(c=>s[c]),type:"bar",marker:{color:COLORS[s.cluster_id%COLORS.length],line:{color:COLORS[(s.cluster_id+1)%COLORS.length],width:2}},hovertemplate:"<b>%{x}</b><br>Value: %{y:.2f}<extra></extra>"}));
+            Plotly.newPlot("cl-chart", traces, {...layout,title:"Cluster Centroids Comparison",barmode:"group",yaxis:{title:"Mean Feature Value"}},{responsive:true});
         }
 
         /* Explorer */
@@ -212,9 +220,9 @@ async function init() {
                 const clusters = [...new Set(clustered.map(r=>r.cluster_id))].sort();
                 const traces = clusters.map(cid => {
                     const pts = clustered.filter(r=>r.cluster_id===cid);
-                    return {x:pts.map(r=>r[xc]),y:pts.map(r=>r[yc]),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.6,size:4}};
+                    return {x:pts.map(r=>r[xc]),y:pts.map(r=>r[yc]),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.7,size:5,line:{color:COLORS[(cid+1)%COLORS.length],width:1}},hovertemplate:"<b>Cluster "+cid+"</b><br>"+title(xc)+": %{x:.2f}<br>"+title(yc)+": %{y:.2f}<extra></extra>"};
                 });
-                Plotly.newPlot("ex-chart", traces, {...layout,xaxis:{title:title(xc)},yaxis:{title:title(yc)},height:500},{responsive:true});
+                Plotly.newPlot("ex-chart", traces, {...layout,title:"Interactive Cluster Explorer",xaxis:{title:title(xc)},yaxis:{title:title(yc)},height:500},{responsive:true});
             }
             selX.onchange = plotExplorer; selY.onchange = plotExplorer;
             plotExplorer();
@@ -225,9 +233,9 @@ async function init() {
             const clusters = [...new Set(tsne.map(r=>r.cluster_id))].sort();
             const traces = clusters.map(cid => {
                 const pts = tsne.filter(r=>r.cluster_id===cid);
-                return {x:pts.map(r=>r.x),y:pts.map(r=>r.y),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.7,size:4}};
+                return {x:pts.map(r=>r.x),y:pts.map(r=>r.y),mode:"markers",type:"scatter",name:`Cluster ${cid}`,marker:{color:COLORS[cid%COLORS.length],opacity:.75,size:5,line:{color:COLORS[(cid+1)%COLORS.length],width:1}},hovertemplate:"<b>Cluster "+cid+"</b><br>t-SNE 1: %{x:.2f}<br>t-SNE 2: %{y:.2f}<extra></extra>"};
             });
-            Plotly.newPlot("tsne-chart", traces, {...layout,xaxis:{title:"t-SNE 1"},yaxis:{title:"t-SNE 2"},height:600},{responsive:true});
+            Plotly.newPlot("tsne-chart", traces, {...layout,title:"t-SNE Dimensionality Reduction",xaxis:{title:"t-SNE Dimension 1"},yaxis:{title:"t-SNE Dimension 2"},height:600},{responsive:true});
         }
 
     } catch(e) {
