@@ -207,6 +207,14 @@ document.querySelectorAll(".nav-btn").forEach(b => b.addEventListener("click", (
 
 function fmt(n) { return typeof n === "number" ? n.toLocaleString(undefined,{maximumFractionDigits:2}) : n; }
 function title(s) { return s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()); }
+function clusterLabel(id) {
+    const labels = {
+        0: "Low Workload",
+        1: "Medium Workload",
+        2: "High Workload",
+    };
+    return labels[id] ?? `Cluster ${id}`;
+}
 
 async function fetchAll(table) {
     let rows = [], from = 0, size = 1000;
@@ -339,7 +347,7 @@ async function init() {
                 let mh = '';
                 sorted.forEach(s => { 
                     const pct = totalRows > 0 ? (s.record_count/totalRows*100).toFixed(1) : 0;
-                    mh += `<div class="metric" style="border-left-color:${COLORS[s.cluster_id%COLORS.length]}"><div class="metric-label">Cluster ${s.cluster_id}</div><div class="metric-value">${s.record_count}</div><div class="metric-sub">${pct}% of data</div></div>`; 
+                    mh += `<div class="metric" style="border-left-color:${COLORS[s.cluster_id%COLORS.length]}"><div class="metric-label">${clusterLabel(s.cluster_id)}</div><div class="metric-value">${s.record_count}</div><div class="metric-sub">${pct}% of data</div></div>`; 
                 });
                 document.getElementById("cl-metrics").innerHTML = mh;
                 
@@ -347,17 +355,17 @@ async function init() {
                 if (meanCols.length > 0) {
                     let th = "<table><thead><tr><th>Cluster</th>" + meanCols.map(c => `<th>${title(c.replace("_mean",""))}</th>`).join("") + "<th>Count</th></tr></thead><tbody>";
                     sorted.forEach(s => { 
-                        th += `<tr><td><strong style="color:${COLORS[s.cluster_id%COLORS.length]}">Cluster ${s.cluster_id}</strong></td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td><strong>${s.record_count}</strong></td></tr>`; 
+                        th += `<tr><td><strong style="color:${COLORS[s.cluster_id%COLORS.length]}">${clusterLabel(s.cluster_id)}</strong></td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td><strong>${s.record_count}</strong></td></tr>`; 
                     });
                     document.getElementById("cl-table").innerHTML = th + "</tbody></table>";
                     
                     const traces = sorted.map(s => ({
-                        name:`Cluster ${s.cluster_id}`,
+                        name:clusterLabel(s.cluster_id),
                         x:meanCols.map(c=>title(c.replace("_mean",""))),
                         y:meanCols.map(c=>s[c]),
                         type:"bar",
                         marker:{color:COLORS[s.cluster_id%COLORS.length],line:{color:COLORS[(s.cluster_id+1)%COLORS.length],width:1}},
-                        hovertemplate:"<b>Cluster "+s.cluster_id+"</b><br>%{x}: %{y:.2f}<extra></extra>"
+                        hovertemplate:"<b>"+clusterLabel(s.cluster_id)+"</b><br>%{x}: %{y:.2f}<extra></extra>"
                     }));
                     Plotly.newPlot("cl-chart", traces, {...layout, title:"Cluster Centroids Comparison", barmode:"group", yaxis:{title:"Mean Feature Value"}, height:450}, {responsive:true});
                 } else {
@@ -403,7 +411,7 @@ async function init() {
                     updateTable();
                 };
                 label.appendChild(cb);
-                label.appendChild(document.createTextNode(` Cluster ${cid}`));
+                label.appendChild(document.createTextNode(` ${clusterLabel(cid)}`));
                 filterDiv.appendChild(label);
             });
             
@@ -413,9 +421,9 @@ async function init() {
                     const pts = clustered.filter(r=>r.cluster_id===cid);
                     return {
                         x:pts.map(r=>r[xc]), y:pts.map(r=>r[yc]),
-                        mode:"markers", type:"scatter", name:`Cluster ${cid}`,
+                        mode:"markers", type:"scatter", name:clusterLabel(cid),
                         marker:{color:COLORS[cid%COLORS.length],opacity:.7,size:5,line:{color:COLORS[(cid+1)%COLORS.length],width:0.5}},
-                        hovertemplate:"<b>Cluster "+cid+"</b><br>"+title(xc)+": %{x:.2f}<br>"+title(yc)+": %{y:.2f}<extra></extra>"
+                        hovertemplate:"<b>"+clusterLabel(cid)+"</b><br>"+title(xc)+": %{x:.2f}<br>"+title(yc)+": %{y:.2f}<extra></extra>"
                     };
                 });
                 Plotly.newPlot("ex-chart", traces, {...layout, title:"Interactive Cluster Explorer", xaxis:{title:title(xc)}, yaxis:{title:title(yc)}, height:500}, {responsive:true});
@@ -427,7 +435,7 @@ async function init() {
                 let th = "<table><thead><tr>" + displayCols.map(c => `<th>${title(c)}</th>`).join("") + "</tr></thead><tbody>";
                 filtered.slice(0, 200).forEach(r => {
                     th += "<tr>" + displayCols.map(c => {
-                        const val = c === "cluster_id" ? `<strong style="color:${COLORS[r.cluster_id%COLORS.length]}">Cluster ${r[c]}</strong>` : fmt(r[c]);
+                        const val = c === "cluster_id" ? `<strong style="color:${COLORS[r.cluster_id%COLORS.length]}">${clusterLabel(r[c])}</strong>` : fmt(r[c]);
                         return `<td>${val}</td>`;
                     }).join("") + "</tr>";
                 });
@@ -449,9 +457,9 @@ async function init() {
                 const pts = tsne.filter(r=>r.cluster_id===cid);
                 return {
                     x:pts.map(r=>r.x), y:pts.map(r=>r.y),
-                    mode:"markers", type:"scatter", name:`Cluster ${cid}`,
+                    mode:"markers", type:"scatter", name:clusterLabel(cid),
                     marker:{color:COLORS[cid%COLORS.length],opacity:.75,size:4,line:{color:COLORS[(cid+1)%COLORS.length],width:0.5}},
-                    hovertemplate:"<b>Cluster "+cid+"</b><br>t-SNE 1: %{x:.2f}<br>t-SNE 2: %{y:.2f}<extra></extra>"
+                    hovertemplate:"<b>"+clusterLabel(cid)+"</b><br>t-SNE 1: %{x:.2f}<br>t-SNE 2: %{y:.2f}<extra></extra>"
                 };
             });
             Plotly.newPlot("tsne-chart", traces, {...layout, title:"t-SNE Dimensionality Reduction", xaxis:{title:"t-SNE Dimension 1"}, yaxis:{title:"t-SNE Dimension 2"}, height:600}, {responsive:true});
@@ -459,7 +467,7 @@ async function init() {
             // t-SNE data table
             let th = "<table><thead><tr><th>t-SNE 1</th><th>t-SNE 2</th><th>Cluster</th></tr></thead><tbody>";
             tsne.slice(0, 100).forEach(r => {
-                th += `<tr><td>${fmt(r.x)}</td><td>${fmt(r.y)}</td><td><strong style="color:${COLORS[r.cluster_id%COLORS.length]}">Cluster ${r.cluster_id}</strong></td></tr>`;
+                th += `<tr><td>${fmt(r.x)}</td><td>${fmt(r.y)}</td><td><strong style="color:${COLORS[r.cluster_id%COLORS.length]}">${clusterLabel(r.cluster_id)}</strong></td></tr>`;
             });
             th += "</tbody></table>";
             th += `<div style="margin-top:8px;font-size:11px;color:var(--muted)">Showing first 100 of ${tsne.length} points</div>`;
