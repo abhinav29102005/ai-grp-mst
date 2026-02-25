@@ -231,6 +231,8 @@ async function init() {
             fetchAll("elbow_data"), fetchAll("cluster_summary"), fetchAll("clustered_data"), fetchAll("tsne_data")
         ]);
 
+        console.log("Data loaded:", {stats: stats.length, outliers: outliers.length, corr: corr.length, elbow: elbow.length, summary: summary.length, clustered: clustered.length, tsne: tsne.length});
+
         document.getElementById("status").textContent = "✓ Connected";
         document.getElementById("status").className = "status ok";
 
@@ -293,15 +295,22 @@ async function init() {
 
         /* Correlation */
         if (corr.length) {
-            const cols = JSON.parse(corr[0].columns_list), mat = JSON.parse(corr[0].matrix_data);
-            const labels = cols.map(c => title(c));
-            const text = mat.map(row => row.map(v => v.toFixed(2)));
-            Plotly.newPlot("corr-chart", [{
-                z:mat, x:labels, y:labels, type:"heatmap",
-                colorscale:"RdBu", reversescale:true, zmin:-1, zmax:1,
-                text:text, texttemplate:"%{text}", textfont:{size:10},
-                hovertemplate:"<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>"
-            }], {...layout, height:600, title:"Feature Correlation Heatmap", xaxis:{tickangle:-45}}, {responsive:true});
+            try {
+                const cols = JSON.parse(corr[0].columns_list), mat = JSON.parse(corr[0].matrix_data);
+                const labels = cols.map(c => title(c));
+                const text = mat.map(row => row.map(v => v.toFixed(2)));
+                Plotly.newPlot("corr-chart", [{
+                    z:mat, x:labels, y:labels, type:"heatmap",
+                    colorscale:"RdBu", reversescale:true, zmin:-1, zmax:1,
+                    text:text, texttemplate:"%{text}", textfont:{size:10},
+                    hovertemplate:"<b>%{y} vs %{x}</b><br>Correlation: %{z:.3f}<extra></extra>"
+                }], {...layout, height:600, title:"Feature Correlation Heatmap", xaxis:{tickangle:-45}}, {responsive:true});
+            } catch(e) {
+                console.error("Correlation error:", e);
+                document.getElementById("corr-chart").innerHTML = `<div style="padding:20px;color:var(--red)">Error loading correlation: ${e.message}</div>`;
+            }
+        } else {
+            document.getElementById("corr-chart").innerHTML = `<div style="padding:20px;color:var(--muted)">No correlation data available</div>`;
         }
 
         /* Elbow */
@@ -325,30 +334,44 @@ async function init() {
 
         /* Clustering */
         if (summary.length) {
-            const sorted = summary.sort((a,b) => a.cluster_id - b.cluster_id);
-            let mh = '';
-            sorted.forEach(s => { 
-                const pct = totalRows > 0 ? (s.record_count/totalRows*100).toFixed(1) : 0;
-                mh += `<div class="metric" style="border-left-color:${COLORS[s.cluster_id%COLORS.length]}"><div class="metric-label">Cluster ${s.cluster_id}</div><div class="metric-value">${s.record_count}</div><div class="metric-sub">${pct}% of data</div></div>`; 
-            });
-            document.getElementById("cl-metrics").innerHTML = mh;
-            
-            const meanCols = Object.keys(sorted[0]).filter(c => c.endsWith("_mean"));
-            let th = "<table><thead><tr><th>Cluster</th>" + meanCols.map(c => `<th>${title(c.replace("_mean",""))}</th>`).join("") + "<th>Count</th></tr></thead><tbody>";
-            sorted.forEach(s => { 
-                th += `<tr><td><strong style="color:${COLORS[s.cluster_id%COLORS.length]}">Cluster ${s.cluster_id}</strong></td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td><strong>${s.record_count}</strong></td></tr>`; 
-            });
-            document.getElementById("cl-table").innerHTML = th + "</tbody></table>";
-            
-            const traces = sorted.map(s => ({
-                name:`Cluster ${s.cluster_id}`,
-                x:meanCols.map(c=>title(c.replace("_mean",""))),
-                y:meanCols.map(c=>s[c]),
-                type:"bar",
-                marker:{color:COLORS[s.cluster_id%COLORS.length],line:{color:COLORS[(s.cluster_id+1)%COLORS.length],width:1}},
-                hovertemplate:"<b>Cluster "+s.cluster_id+"</b><br>%{x}: %{y:.2f}<extra></extra>"
-            }));
-            Plotly.newPlot("cl-chart", traces, {...layout, title:"Cluster Centroids Comparison", barmode:"group", yaxis:{title:"Mean Feature Value"}, height:450}, {responsive:true});
+            try {
+                const sorted = summary.sort((a,b) => a.cluster_id - b.cluster_id);
+                let mh = '';
+                sorted.forEach(s => { 
+                    const pct = totalRows > 0 ? (s.record_count/totalRows*100).toFixed(1) : 0;
+                    mh += `<div class="metric" style="border-left-color:${COLORS[s.cluster_id%COLORS.length]}"><div class="metric-label">Cluster ${s.cluster_id}</div><div class="metric-value">${s.record_count}</div><div class="metric-sub">${pct}% of data</div></div>`; 
+                });
+                document.getElementById("cl-metrics").innerHTML = mh;
+                
+                const meanCols = Object.keys(sorted[0]).filter(c => c.endsWith("_mean"));
+                if (meanCols.length > 0) {
+                    let th = "<table><thead><tr><th>Cluster</th>" + meanCols.map(c => `<th>${title(c.replace("_mean",""))}</th>`).join("") + "<th>Count</th></tr></thead><tbody>";
+                    sorted.forEach(s => { 
+                        th += `<tr><td><strong style="color:${COLORS[s.cluster_id%COLORS.length]}">Cluster ${s.cluster_id}</strong></td>` + meanCols.map(c => `<td>${fmt(s[c])}</td>`).join("") + `<td><strong>${s.record_count}</strong></td></tr>`; 
+                    });
+                    document.getElementById("cl-table").innerHTML = th + "</tbody></table>";
+                    
+                    const traces = sorted.map(s => ({
+                        name:`Cluster ${s.cluster_id}`,
+                        x:meanCols.map(c=>title(c.replace("_mean",""))),
+                        y:meanCols.map(c=>s[c]),
+                        type:"bar",
+                        marker:{color:COLORS[s.cluster_id%COLORS.length],line:{color:COLORS[(s.cluster_id+1)%COLORS.length],width:1}},
+                        hovertemplate:"<b>Cluster "+s.cluster_id+"</b><br>%{x}: %{y:.2f}<extra></extra>"
+                    }));
+                    Plotly.newPlot("cl-chart", traces, {...layout, title:"Cluster Centroids Comparison", barmode:"group", yaxis:{title:"Mean Feature Value"}, height:450}, {responsive:true});
+                } else {
+                    document.getElementById("cl-table").innerHTML = `<div style="padding:20px;color:var(--muted)">No mean columns found in cluster summary</div>`;
+                    document.getElementById("cl-chart").innerHTML = `<div style="padding:20px;color:var(--muted)">No clustering data to display</div>`;
+                }
+            } catch(e) {
+                console.error("Clustering error:", e);
+                document.getElementById("cl-metrics").innerHTML = `<div style="padding:20px;color:var(--red)">Error loading clustering metrics: ${e.message}</div>`;
+                document.getElementById("cl-table").innerHTML = `<div style="padding:20px;color:var(--red)">Error loading clustering table: ${e.message}</div>`;
+            }
+        } else {
+            document.getElementById("cl-metrics").innerHTML = `<div style="padding:20px;color:var(--muted)">No cluster summary data available</div>`;
+            document.getElementById("cl-table").innerHTML = `<div style="padding:20px;color:var(--muted)">No clustering data available</div>`;
         }
 
         /* Explorer */
