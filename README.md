@@ -1,5 +1,10 @@
 # Cloud Resource Allocation - Clustering Dashboard
 
+
+
+### [DEMO WEBSITE LINK](https://aigrp23-2026.bigboyaks.me/)
+
+----------------------------------------------------------------------------------------------------
 Streamlit dashboard with Supabase backend. ML results are pre-computed locally and stored in Supabase.
 
 ## Architecture
