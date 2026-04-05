@@ -1,0 +1,10 @@
+id,feature_name,outlier_count,created_at
+10,cpu_usage,0,2026-02-24 17:28:19.62172+00
+11,memory_usage,0,2026-02-24 17:28:19.62172+00
+12,network_usage,0,2026-02-24 17:28:19.62172+00
+13,disk_io,0,2026-02-24 17:28:19.62172+00
+14,energy_consumption,0,2026-02-24 17:28:19.62172+00
+15,service_latency,0,2026-02-24 17:28:19.62172+00
+16,task_priority,0,2026-02-24 17:28:19.62172+00
+17,workload_type_low,0,2026-02-24 17:28:19.62172+00
+18,workload_type_medium,0,2026-02-24 17:28:19.62172+00
